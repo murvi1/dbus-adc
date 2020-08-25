@@ -47,10 +47,26 @@ veBool adcRead(un32 *value, AnalogSensor *sensor)
  * @param f - filter parameters
  * @return the next filtered value (filter output)
  */
-float adcFilter(float x, FilerIirLpf *f)
+float adcFilter(float x, Filter *f)
 {
-	if (f->FF && fabs(f->last - x) > f->FF)
-		f->last = x;
+	int i;
 
-	return f->last += (x - f->last) * 2 * M_PI * f->fc;
+	if (f->sum < 0) {
+		for (i = 0; i < FILTER_LEN; i++)
+			f->values[i] = x;
+
+		f->sum = FILTER_LEN * x;
+	}
+
+	f->sum += x;
+	f->sum -= f->values[f->pos];
+	f->values[f->pos] = x;
+	f->pos = (f->pos + 1) & (FILTER_LEN - 1);
+
+	return f->sum / FILTER_LEN;
+}
+
+void adcFilterReset(Filter *f)
+{
+	f->sum = -1;
 }

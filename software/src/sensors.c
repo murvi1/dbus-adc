@@ -17,7 +17,6 @@
 #define INSTANCE_BASE						20
 
 #define MAX_SENSORS							32
-#define SAMPLE_RATE							10
 
 // defines for the tank level sensor analog front end parameters
 #define TANK_SENS_VREF						5.0
@@ -43,14 +42,6 @@
 #define TEMP_SENS_INV_PLRTY_ADCIN_BAND		0.15
 #define TEMP_SENS_INV_PLRTY_ADCIN_LB		(TEMP_SENS_INV_PLRTY_ADCIN - TEMP_SENS_INV_PLRTY_ADCIN_BAND)
 #define TEMP_SENS_INV_PLRTY_ADCIN_HB		(TEMP_SENS_INV_PLRTY_ADCIN + TEMP_SENS_INV_PLRTY_ADCIN_BAND)
-
-// defines to tank level sensor filter parameters
-#define TANK_SENSOR_IIR_LPF_FF_VALUE		0.4
-#define TANK_SENSOR_CUTOFF_FREQ				(0.001 / SAMPLE_RATE)
-
-// defines to temperature sensor filter parameters
-#define TEMPERATURE_SENSOR_IIR_LPF_FF_VALUE	0.2
-#define TEMPERATURE_SENSOR_CUTOFF_FREQ		(0.01 / SAMPLE_RATE)
 
 static AnalogSensor *sensors[MAX_SENSORS];
 static int sensorCount;
@@ -438,11 +429,6 @@ static void createItems(AnalogSensor *sensor, const char *devid, SensorInfo *s)
 static void tankInit(AnalogSensor *sensor, const char *devid)
 {
 	SensorDbusInterface *dbus = &sensor->interface.dbus;
-	FilerIirLpf *lpf = &sensor->interface.sigCond.filterIirLpf;
-
-	lpf->FF = TANK_SENSOR_IIR_LPF_FF_VALUE;
-	lpf->fc = TANK_SENSOR_CUTOFF_FREQ;
-	lpf->last = HUGE_VALF;
 
 	snprintf(dbus->service, sizeof(dbus->service),
 			 "com.victronenergy.tank.%s", devid);
@@ -451,11 +437,6 @@ static void tankInit(AnalogSensor *sensor, const char *devid)
 static void temperatureInit(AnalogSensor *sensor, const char *devid)
 {
 	SensorDbusInterface *dbus = &sensor->interface.dbus;
-	FilerIirLpf *lpf = &sensor->interface.sigCond.filterIirLpf;
-
-	lpf->FF = TEMPERATURE_SENSOR_IIR_LPF_FF_VALUE;
-	lpf->fc = TEMPERATURE_SENSOR_CUTOFF_FREQ;
-	lpf->last = HUGE_VALF;
 
 	snprintf(dbus->service, sizeof(dbus->service),
 			 "com.victronenergy.temperature.%s", devid);
@@ -506,6 +487,8 @@ AnalogSensor *sensorCreate(SensorInfo *s)
 		snprintf(sensor->ifaceName, sizeof(sensor->ifaceName), "%s", s->label);
 	else
 		snprintf(sensor->ifaceName, sizeof(sensor->ifaceName), "Analog input %s:%d", s->dev, s->pin);
+
+	adcFilterReset(&sensor->interface.sigCond.filter);
 
 	if (sensor->sensorType == SENSOR_TYPE_TANK)
 		tankInit(sensor, devid);
@@ -697,13 +680,6 @@ void sensorTick(void)
 {
 	int i;
 	VeVariant v;
-	static int secCounter;
-	veBool isSec = veFalse;
-
-	if (++secCounter == 10) {
-		isSec = veTrue;
-		secCounter = 0;
-	}
 
 	/* Read the ADC values */
 	for (i = 0; i < sensorCount; i++) {
@@ -718,18 +694,14 @@ void sensorTick(void)
 	/* Handle ADC values */
 	for (i = 0; i < sensorCount; i++) {
 		AnalogSensor *sensor = sensors[i];
-		FilerIirLpf *filter = &sensor->interface.sigCond.filterIirLpf;
+		Filter *filter = &sensor->interface.sigCond.filter;
 
 		if (!sensor->valid)
 			continue;
 
-		/* filter the input ADC sample, high rate */
+		/* filter the input ADC sample */
 		sensor->interface.adcSample =
 			adcFilter(sensor->interface.adcSampleRaw, filter);
-
-		/* dbus update part can be at a lower rate */
-		if (!isSec)
-			continue;
 
 		if (!veVariantIsValid(veItemLocalValue(sensor->function, &v)))
 			continue;

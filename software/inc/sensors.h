@@ -48,17 +48,18 @@ typedef struct {
 	float offset;
 } SignalCorrection;
 
-// Single pole iir low pass filter variables
+#define FILTER_LEN 8
+
 typedef struct {
-	float FF;
-	float fc;
-	float last;
-} FilerIirLpf;
+	float values[FILTER_LEN];
+	float sum;
+	int pos;
+} Filter;
 
 // building a sensor signal conditioning structure
 typedef struct {
 	SignalCorrection sigCorrect;
-	FilerIirLpf filterIirLpf;
+	Filter filter;
 } SignalCondition;
 
 // building a sensor interface structure
@@ -131,7 +132,8 @@ AnalogSensor *sensorCreate(SensorInfo *s);
 void sensorTick(void);
 
 veBool adcRead(un32 *value, AnalogSensor *sensor);
-float adcFilter(float x, FilerIirLpf *f);
+float adcFilter(float x, Filter *f);
+void adcFilterReset(Filter *f);
 
 struct VeItem *getLocalSettings(void);
 struct VeItem *getDbusRoot(void);
