@@ -49,6 +49,14 @@ static int sensorCount;
 static VeVariantUnitFmt veUnitVolume = {3, "m3"};
 static VeVariantUnitFmt veUnitCelsius0Dec = {0, "C"};
 static VeVariantUnitFmt unitRes0Dec = {0, "ohm"};
+static VeVariantUnitFmt unitSeconds = {0, "s"};
+
+static struct VeSettingProperties filterLenProps = {
+	.type = VE_SN32,
+	.def.value.SN32 = 10,
+	.min.value.SN32 = 1,
+	.max.value.SN32 = 60,
+};
 
 /* Tank sensor */
 static struct VeSettingProperties tankCapacityProps = {
@@ -330,6 +338,17 @@ static void onTankSenseChanged(struct VeItem *item)
 	setTankLevels(tank, minVal, maxVal);
 }
 
+static void onFilterLenChanged(struct VeItem *item)
+{
+	AnalogSensor *sensor = veItemCtx(item)->ptr;
+	VeVariant len;
+
+	if (!veVariantIsValid(veItemLocalValue(sensor->filterLenItem, &len)))
+		return;
+
+	adcFilterSetLen(&sensor->interface.sigCond.filter, len.value.SN32);
+}
+
 static void createItems(AnalogSensor *sensor, const char *devid, SensorInfo *s)
 {
 	VeVariant v;
@@ -361,6 +380,11 @@ static void createItems(AnalogSensor *sensor, const char *devid, SensorInfo *s)
 
 	createSettingsProxy(root, prefix, "CustomName", veVariantFmt, &veUnitNone,
 						&emptyStrType, NULL);
+
+	sensor->filterLenItem = createSettingsProxy(root, prefix, "FilterLength",
+			veVariantFmt, &unitSeconds, &filterLenProps, NULL);
+	veItemCtx(sensor->filterLenItem)->ptr = sensor;
+	veItemSetChanged(sensor->filterLenItem, onFilterLenChanged);
 
 	sensor->rawValueItem = veItemCreateBasic(root, "RawValue",
 			veVariantInvalidType(&v, VE_FLOAT));

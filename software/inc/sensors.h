@@ -48,12 +48,15 @@ typedef struct {
 	float offset;
 } SignalCorrection;
 
-#define FILTER_LEN 8
+#define FILTER_LEN 64
+#define FILTER_MASK (FILTER_LEN - 1)
 
 typedef struct {
 	float values[FILTER_LEN];
 	float sum;
-	int pos;
+	unsigned len;
+	unsigned head;
+	unsigned tail;
 } Filter;
 
 // building a sensor signal conditioning structure
@@ -88,6 +91,7 @@ typedef struct {
 	struct VeItem *statusItem;
 	struct VeItem *rawValueItem;
 	struct VeItem *rawUnitItem;
+	struct VeItem *filterLenItem;
 } AnalogSensor;
 
 #define TANK_SHAPE_MAX_POINTS 10
@@ -134,6 +138,7 @@ void sensorTick(void);
 veBool adcRead(un32 *value, AnalogSensor *sensor);
 float adcFilter(float x, Filter *f);
 void adcFilterReset(Filter *f);
+void adcFilterSetLen(Filter *f, unsigned len);
 
 struct VeItem *getLocalSettings(void);
 struct VeItem *getDbusRoot(void);
